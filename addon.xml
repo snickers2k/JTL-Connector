@@ -1,0 +1,26 @@
+<?xml version="1.0"?>
+<addon scheme="3.0">
+  <id>jtl_connector</id>
+  <version>0.1.0</version>
+  <priority>100</priority>
+  <status>active</status>
+  <default_language>en</default_language>
+  <name>JTL Connector (CS-Cart)</name>
+  <description>Direct JTL-Wawi &lt;-&gt; CS-Cart connector endpoint (multi-vendor aware), based on jtl/connector-core.</description>
+
+  <queries>
+    <item for="install">database/install.sql</item>
+    <item for="uninstall">database/uninstall.sql</item>
+  </queries>
+
+  <settings>
+    <section id="general">
+      <item id="enabled" type="checkbox" default_value="N">Enabled</item>
+      <item id="default_language" type="input" default_value="en">Default language ISO-639-1 (e.g. en, de)</item>
+      <item id="currency_iso" type="input" default_value="EUR">Currency ISO (e.g. EUR)</item>
+      <item id="tax_rate_default" type="input" default_value="19.0">Default tax rate (percent)</item>
+      <item id="order_status_shipped" type="input" default_value="C">CS-Cart status code for "shipped"</item>
+      <item id="order_status_cancelled" type="input" default_value="I">CS-Cart status code for "cancelled"</item>
+    </section>
+  </settings>
+</addon>

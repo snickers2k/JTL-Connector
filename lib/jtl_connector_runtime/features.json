@@ -1,0 +1,38 @@
+{
+  "entities": {
+    "GlobalData": {
+      "pull": true,
+      "push": false,
+      "delete": false
+    },
+    "Category": {
+      "pull": true,
+      "push": false,
+      "delete": false
+    },
+    "Product": {
+      "pull": true,
+      "push": true,
+      "delete": true
+    },
+    "CustomerOrder": {
+      "pull": true,
+      "push": false,
+      "delete": false
+    },
+    "StatusChange": {
+      "pull": false,
+      "push": true,
+      "delete": false
+    }
+  },
+  "flags": {
+    "product_images_supported": false,
+    "category_images_supported": false,
+    "variation_products_supported": false,
+    "variation_combinations_supported": false,
+    "needs_category_root": false,
+    "send_all_acks": false,
+    "disable_statistics": false
+  }
+}

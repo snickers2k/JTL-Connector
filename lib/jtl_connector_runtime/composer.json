@@ -1,0 +1,16 @@
+{
+  "name": "growzone/cs-cart-jtl-connector-runtime",
+  "description": "Runtime deps for CS-Cart JTL connector endpoint",
+  "type": "project",
+  "require": {
+    "php": ">=8.1",
+    "jtl/connector": "^5.0",
+    "ramsey/uuid": "^4.0",
+    "ext-pdo": "*"
+  },
+  "autoload": {
+    "psr-4": {
+      "CsCartJtlConnector\\": "../../src/"
+    }
+  }
+}

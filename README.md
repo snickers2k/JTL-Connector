@@ -1,4 +1,4 @@
-# CS-Cart JTL Connector (direct, no ghost-shop)
+# CS-Cart JTL Connector
 
 This add-on exposes a **real JTL-Connector endpoint** (RPC-style) for CS-Cart Multi-Vendor.
 

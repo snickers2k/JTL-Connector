@@ -1,8 +1,53 @@
 <?php
 defined('BOOTSTRAP') or die('Access denied');
 
-use Tygh\Registry;
 use Tygh\Tygh;
+
+$mode = $mode ?? ($_REQUEST['mode'] ?? '');
+
+// Lightweight cron endpoint (token-protected), usable by external schedulers.
+// Example:
+//   /index.php?dispatch=jtl_connector.cron&task=watchdog_tick&token=... 
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && $mode === 'cron') {
+    $token = (string)($_REQUEST['token'] ?? '');
+    $task = (string)($_REQUEST['task'] ?? '');
+
+    $expected = '';
+    if (function_exists('fn_jtl_connector_get_cron_token')) {
+        $expected = fn_jtl_connector_get_cron_token();
+    }
+
+    if ($expected === '' || !hash_equals($expected, $token)) {
+        header('HTTP/1.1 403 Forbidden');
+        header('Content-Type: text/plain; charset=utf-8');
+        echo 'Forbidden';
+        exit;
+    }
+
+    header('Content-Type: text/plain; charset=utf-8');
+    $ran = [];
+    try {
+        if ($task === 'watchdog_tick' || $task === 'all' || $task === '') {
+            if (function_exists('fn_jtl_connector_watchdog_tick')) {
+                fn_jtl_connector_watchdog_tick();
+                $ran[] = 'watchdog_tick';
+            }
+        }
+        if ($task === 'prune_logs' || $task === 'all') {
+            if (function_exists('fn_jtl_connector_prune_logs')) {
+                fn_jtl_connector_prune_logs();
+                $ran[] = 'prune_logs';
+            }
+        }
+    } catch (\Throwable $e) {
+        header('HTTP/1.1 500 Internal Server Error');
+        echo 'Error: ' . $e->getMessage();
+        exit;
+    }
+
+    echo 'OK ' . implode(',', $ran);
+    exit;
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Direct JTL connector endpoint handler
@@ -38,6 +83,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
+    // Rate limiting + request audit (best-effort; does not inspect JSON body)
+    $log_id = fn_jtl_connector_log_request_start($company_id);
+    if (!fn_jtl_connector_rate_limit_allow($company_id)) {
+        header('HTTP/1.1 429 Too Many Requests');
+        header('Content-Type: text/plain; charset=utf-8');
+        echo 'Rate limit exceeded';
+        fn_jtl_connector_log_request_finish($log_id, false, 0, 'rate_limit');
+        fn_jtl_connector_watchdog_update($company_id, false, 'rate_limit');
+        fn_jtl_connector_debug_event($company_id, 'WARN', 'rate_limit', 'Rate limit exceeded', [], null, $log_id);
+        exit;
+    }
+
     // Boot connector runtime (composer autoload inside addon)
     $autoload = __DIR__ . '/../../lib/jtl_connector_runtime/vendor/autoload.php';
     if (!file_exists($autoload)) {
@@ -50,7 +107,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     require_once __DIR__ . '/../../src/Bootstrap.php';
 
-    \CsCartJtlConnector\Bootstrap::runEndpoint($company_id, (string)$vendor_row['token']);
+    $t0 = microtime(true);
+    try {
+        \CsCartJtlConnector\Bootstrap::runEndpoint($company_id, (string)$vendor_row['token']);
+        $ms = (int)round((microtime(true) - $t0) * 1000);
+        fn_jtl_connector_log_request_finish($log_id, true, $ms, null);
+        fn_jtl_connector_watchdog_update($company_id, true, null);
+
+        // Verbose mode stores structured payload samples inside entity push controllers.
+    } catch (\Throwable $e) {
+        $ms = (int)round((microtime(true) - $t0) * 1000);
+        // Avoid leaking sensitive stack traces to clients; keep detail in logs.
+        header('HTTP/1.1 500 Internal Server Error');
+        header('Content-Type: text/plain; charset=utf-8');
+        echo 'Connector error';
+        fn_jtl_connector_log_request_finish($log_id, false, $ms, $e->getMessage());
+        fn_jtl_connector_watchdog_update($company_id, false, $e->getMessage());
+        fn_jtl_connector_debug_event($company_id, 'ERROR', 'endpoint_exception', $e->getMessage(), [
+            'file' => $e->getFile(),
+            'line' => $e->getLine(),
+        ], null, $log_id);
+    }
     exit;
 }
 
@@ -65,4 +142,3 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     Tygh::$app['view']->display('addons/jtl_connector/views/jtl_connector/info.tpl');
     exit;
 }
-

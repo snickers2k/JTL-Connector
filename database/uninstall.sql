@@ -1,2 +1,10 @@
 DROP TABLE IF EXISTS `?:jtl_connector_mapping`;
 DROP TABLE IF EXISTS `?:jtl_connector_vendor`;
+DROP TABLE IF EXISTS `?:jtl_connector_request_log`;
+DROP TABLE IF EXISTS `?:jtl_connector_rate_limit`;
+DROP TABLE IF EXISTS `?:jtl_connector_debug_event`;
+DROP TABLE IF EXISTS `?:jtl_connector_watchdog_state`;
+DROP TABLE IF EXISTS `?:jtl_connector_variation_parent`;
+DROP TABLE IF EXISTS `?:jtl_connector_admin_alert`;
+DROP TABLE IF EXISTS `?:jtl_connector_payload_sample`;
+DROP TABLE IF EXISTS `?:jtl_connector_scheduler_state`;

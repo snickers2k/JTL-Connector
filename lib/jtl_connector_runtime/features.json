@@ -10,6 +10,11 @@
       "push": false,
       "delete": false
     },
+    "Image": {
+      "pull": false,
+      "push": true,
+      "delete": false
+    },
     "Product": {
       "pull": true,
       "push": true,
@@ -27,10 +32,10 @@
     }
   },
   "flags": {
-    "product_images_supported": false,
-    "category_images_supported": false,
-    "variation_products_supported": false,
-    "variation_combinations_supported": false,
+    "product_images_supported": true,
+    "category_images_supported": true,
+    "variation_products_supported": true,
+    "variation_combinations_supported": true,
     "needs_category_root": false,
     "send_all_acks": false,
     "disable_statistics": false

@@ -33,6 +33,13 @@ final class ProductController implements PullInterface, PushInterface, DeleteInt
         $prefix = defined('TABLE_PREFIX') ? TABLE_PREFIX : 'cscart_';
         $lang = (string)\fn_jtl_connector_get_addon_setting('default_language', 'en');
 
+        // Capture a structured payload sample for troubleshooting (best-effort; requires verbose_enabled).
+        try {
+            \fn_jtl_connector_capture_payload_sample($this->companyId, 'product', 'push', $model, null);
+        } catch (\Throwable $e) {
+            // ignore
+        }
+
         $endpointId = $model->getId()->getEndpoint();
         $productId = $endpointId !== '' ? (int)$endpointId : 0;
 
@@ -64,13 +71,80 @@ final class ProductController implements PullInterface, PushInterface, DeleteInt
             }
         }
 
-        // Insert/update products
+        $status = $model->getIsActive() ? 'A' : 'D';
+
+        // Categories (best-effort: map JTL endpoint IDs to CS-Cart category_ids)
+        $categoryIds = [];
+        if (method_exists($model, 'getCategoryId')) {
+            $cid = $model->getCategoryId();
+            if ($cid instanceof Identity) {
+                $val = (int)$cid->getEndpoint();
+                if ($val > 0) {
+                    $categoryIds[] = $val;
+                }
+            }
+        }
+        if (empty($categoryIds) && method_exists($model, 'getCategories')) {
+            foreach ($model->getCategories() as $cid) {
+                if ($cid instanceof Identity) {
+                    $val = (int)$cid->getEndpoint();
+                    if ($val > 0) {
+                        $categoryIds[] = $val;
+                    }
+                }
+            }
+        }
+        $categoryIds = array_values(array_unique(array_filter($categoryIds)));
+
+        // Prefer CS-Cart core function to keep all derived fields consistent.
+        if (function_exists('fn_update_product')) {
+            $data = [
+                'company_id' => $this->companyId,
+                'product_code' => $sku,
+                'amount' => $stock,
+                'price' => $netPrice ?? 0.0,
+                'status' => $status,
+                'product' => $name,
+                'full_description' => $desc,
+                'lang_code' => $lang,
+            ];
+            if (!empty($categoryIds)) {
+                $data['category_ids'] = implode(',', $categoryIds);
+            }
+
+            $res = \fn_update_product($data, $productId, $lang);
+            if (is_array($res)) {
+                $productId = (int)($res[0] ?? $productId);
+            } else {
+                $productId = (int)$res;
+            }
+
+            if ($productId > 0) {
+                $model->getId()->setEndpoint((string)$productId);
+            }
+
+            // Best-effort: if Product Variations add-on is active, group this product as a variation.
+            if ($productId > 0) {
+                try {
+                    \fn_jtl_connector_try_group_product_variation($this->companyId, $productId, $model, $lang);
+                } catch (\Throwable $e) {
+                    // Never break sync because of variation grouping.
+                    \fn_jtl_connector_debug_event($this->companyId, 'WARN', 'pv_grouping_failed', $e->getMessage(), [
+                        'product_id' => $productId,
+                    ]);
+                }
+            }
+            return $model;
+        }
+
+        // Insert/update products (fallback SQL)
         if ($productId > 0) {
-            $stmt = $this->pdo->prepare('UPDATE ' . $prefix . 'products SET product_code=?, amount=?, price=? WHERE product_id=? AND company_id=?');
+            $stmt = $this->pdo->prepare('UPDATE ' . $prefix . 'products SET product_code=?, amount=?, price=?, status=? WHERE product_id=? AND company_id=?');
             $stmt->execute([
                 $sku,
                 $stock,
                 $netPrice ?? 0.0,
+                $status,
                 $productId,
                 $this->companyId,
             ]);
@@ -81,7 +155,7 @@ final class ProductController implements PullInterface, PushInterface, DeleteInt
                 $sku,
                 $stock,
                 $netPrice ?? 0.0,
-                $model->getIsActive() ? 'A' : 'D',
+                $status,
             ]);
             $productId = (int)$this->pdo->lastInsertId();
             $model->getId()->setEndpoint((string)$productId);
@@ -90,6 +164,28 @@ final class ProductController implements PullInterface, PushInterface, DeleteInt
         // Upsert description
         $stmt = $this->pdo->prepare('REPLACE INTO ' . $prefix . 'product_descriptions (product_id, lang_code, product, full_description) VALUES (?, ?, ?, ?)');
         $stmt->execute([$productId, $lang, $name, $desc]);
+
+        // Categories (fallback SQL)
+        if (!empty($categoryIds)) {
+            // Replace category links for this product.
+            $stmt = $this->pdo->prepare('DELETE FROM ' . $prefix . 'products_categories WHERE product_id=?');
+            $stmt->execute([$productId]);
+            $stmtIns = $this->pdo->prepare('INSERT INTO ' . $prefix . 'products_categories (product_id, category_id, link_type) VALUES (?, ?, ?)');
+            foreach ($categoryIds as $cid) {
+                $stmtIns->execute([$productId, (int)$cid, 'M']);
+            }
+        }
+
+        // Best-effort variation grouping.
+        if ($productId > 0) {
+            try {
+                \fn_jtl_connector_try_group_product_variation($this->companyId, $productId, $model, $lang);
+            } catch (\Throwable $e) {
+                \fn_jtl_connector_debug_event($this->companyId, 'WARN', 'pv_grouping_failed', $e->getMessage(), [
+                    'product_id' => $productId,
+                ]);
+            }
+        }
 
         return $model;
     }

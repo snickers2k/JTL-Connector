@@ -4,15 +4,18 @@ declare(strict_types=1);
 namespace CsCartJtlConnector\Controller;
 
 use Jtl\Connector\Core\Controller\PullInterface;
+use Jtl\Connector\Core\Controller\PushInterface;
+use Jtl\Connector\Core\Controller\DeleteInterface;
 use Jtl\Connector\Core\Controller\StatisticsInterface;
 use Jtl\Connector\Core\Model\Category;
 use Jtl\Connector\Core\Model\CategoryI18n;
+use Jtl\Connector\Core\Model\AbstractModel;
 use Jtl\Connector\Core\Model\Identity;
 use Jtl\Connector\Core\Model\QueryFilter;
 use Jtl\Connector\Core\Definition\IdentityType;
 use PDO;
 
-final class CategoryController implements PullInterface, StatisticsInterface
+final class CategoryController implements PullInterface, PushInterface, DeleteInterface, StatisticsInterface
 {
     private PDO $pdo;
     private int $companyId;
@@ -50,6 +53,93 @@ final class CategoryController implements PullInterface, StatisticsInterface
         }
 
         return $out;
+    }
+
+    public function push(AbstractModel $model): AbstractModel
+    {
+        /** @var Category $model */
+        $lang = (string)\fn_jtl_connector_get_addon_setting('default_language', 'en');
+
+        // Capture a structured payload sample for troubleshooting (best-effort; requires verbose_enabled).
+        try {
+            \fn_jtl_connector_capture_payload_sample($this->companyId, 'category', 'push', $model, null);
+        } catch (\Throwable $e) {
+            // ignore
+        }
+
+        $endpointId = $model->getId()->getEndpoint();
+        $categoryId = $endpointId !== '' ? (int)$endpointId : 0;
+
+        $name = '';
+        $desc = '';
+        foreach ($model->getI18ns() as $i18n) {
+            if ($i18n->getLanguageIso() === $lang) {
+                $name = $i18n->getName();
+                $desc = $i18n->getDescription();
+                break;
+            }
+            if ($name === '' && $i18n->getName() !== '') {
+                $name = $i18n->getName();
+                $desc = $i18n->getDescription();
+            }
+        }
+
+        $parentId = (int)($model->getParentCategoryId()?->getEndpoint() ?? 0);
+        $status = $model->getIsActive() ? 'A' : 'D';
+
+        // Prefer CS-Cart core functions (they calculate id_path, level, etc.)
+        if (function_exists('fn_update_category')) {
+            $data = [
+                'parent_id' => $parentId,
+                'status' => $status,
+                'category' => $name,
+                'description' => $desc,
+                'lang_code' => $lang,
+            ];
+            $newId = (int)\fn_update_category($data, $categoryId, $lang);
+            if ($newId > 0) {
+                $model->getId()->setEndpoint((string)$newId);
+            }
+            return $model;
+        }
+
+        // Fallback: minimal SQL upsert (may miss derived fields in some CS-Cart setups)
+        $prefix = defined('TABLE_PREFIX') ? TABLE_PREFIX : 'cscart_';
+
+        if ($categoryId > 0) {
+            $stmt = $this->pdo->prepare('UPDATE ' . $prefix . 'categories SET parent_id=?, status=? WHERE category_id=?');
+            $stmt->execute([$parentId, $status, $categoryId]);
+        } else {
+            $stmt = $this->pdo->prepare('INSERT INTO ' . $prefix . 'categories (parent_id, status) VALUES (?, ?)');
+            $stmt->execute([$parentId, $status]);
+            $categoryId = (int)$this->pdo->lastInsertId();
+            $model->getId()->setEndpoint((string)$categoryId);
+        }
+
+        $stmt = $this->pdo->prepare('REPLACE INTO ' . $prefix . 'category_descriptions (category_id, lang_code, category, description) VALUES (?, ?, ?, ?)');
+        $stmt->execute([$categoryId, $lang, $name, $desc]);
+
+        return $model;
+    }
+
+    public function delete(AbstractModel $model): AbstractModel
+    {
+        /** @var Category $model */
+        $categoryId = (int)$model->getId()->getEndpoint();
+        if ($categoryId <= 0) {
+            return $model;
+        }
+
+        if (function_exists('fn_update_category')) {
+            $lang = (string)\fn_jtl_connector_get_addon_setting('default_language', 'en');
+            \fn_update_category(['status' => 'D'], $categoryId, $lang);
+            return $model;
+        }
+
+        $prefix = defined('TABLE_PREFIX') ? TABLE_PREFIX : 'cscart_';
+        $stmt = $this->pdo->prepare('UPDATE ' . $prefix . 'categories SET status=? WHERE category_id=?');
+        $stmt->execute(['D', $categoryId]);
+        return $model;
     }
 
     public function statistic(QueryFilter $queryFilter): int

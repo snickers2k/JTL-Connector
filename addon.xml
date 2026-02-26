@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <addon scheme="3.0">
   <id>jtl_connector</id>
-  <version>0.1.0</version>
+  <version>0.4.1</version>
   <priority>100</priority>
   <status>active</status>
   <default_language>en</default_language>
@@ -19,8 +19,59 @@
       <item id="default_language" type="input" default_value="en">Default language ISO-639-1 (e.g. en, de)</item>
       <item id="currency_iso" type="input" default_value="EUR">Currency ISO (e.g. EUR)</item>
       <item id="tax_rate_default" type="input" default_value="19.0">Default tax rate (percent)</item>
+
+      <item id="rate_limit_per_min" type="input" default_value="120">Rate limit (requests/min per vendor). 0 = unlimited</item>
       <item id="order_status_shipped" type="input" default_value="C">CS-Cart status code for "shipped"</item>
       <item id="order_status_cancelled" type="input" default_value="I">CS-Cart status code for "cancelled"</item>
+
+      <item id="order_status_paid" type="input" default_value="P">CS-Cart status code for paymentStatus="paid"</item>
+      <item id="order_status_processing" type="input" default_value="O">CS-Cart status code for orderStatus="processing"</item>
+      <item id="order_status_delivered" type="input" default_value="C">CS-Cart status code for orderStatus="delivered"</item>
+
+      <item id="use_product_variations" type="checkbox" default_value="Y">Auto-use Product Variations add-on if active (best-effort)</item>
+      <item id="variations_auto_create_features" type="checkbox" default_value="N">Auto-create missing variation features/variants (risky; use with care)</item>
+      <item id="variations_group_purpose" type="selectbox" default_value="group_variation_catalog_item">
+        Variation group purpose
+        <variants>
+          <item id="group_variation_catalog_item">Variations as one product (recommended)</item>
+          <item id="group_catalog_item">Variations as separate products</item>
+        </variants>
+      </item>
+
+      <item id="debug_enabled" type="checkbox" default_value="N">Enable debug logging</item>
+      <item id="verbose_enabled" type="checkbox" default_value="N">Enable verbose logging (captures structured payload samples; may contain sensitive data)</item>
+      <item id="verbose_payload_max_kb" type="input" default_value="256">Verbose payload max size (KB, truncated)</item>
+      <item id="verbose_redact_enabled" type="checkbox" default_value="Y">Verbose: redact sensitive fields in payload snippets (recommended)</item>
+
+      <item id="watchdog_enabled" type="checkbox" default_value="Y">Watchdog: monitor sync health and alert admins on failures</item>
+      <item id="watchdog_fail_threshold" type="input" default_value="3">Watchdog: consecutive failures before alert</item>
+      <item id="watchdog_cooldown_min" type="input" default_value="60">Watchdog: alert cooldown (minutes)</item>
+      <item id="watchdog_idle_minutes" type="input" default_value="1440">Watchdog: alert if no successful sync for N minutes (0=off)</item>
+      <item id="watchdog_notify_email" type="input" default_value="">Watchdog: notify email (empty = site administrator email)</item>
+
+      <item id="retain_request_log_days" type="input" default_value="30">Retention: request log days (0 = keep forever)</item>
+      <item id="retain_debug_event_days" type="input" default_value="14">Retention: debug/verbose event days (0 = keep forever)</item>
+      <item id="retain_rate_limit_days" type="input" default_value="2">Retention: rate limit windows days (0 = keep forever)</item>
+
+      <item id="retain_payload_samples_days" type="input" default_value="7">Retention: payload samples days (0 = keep forever)</item>
+      <item id="payload_samples_keep" type="input" default_value="3">Payload samples: keep last N per vendor+entity</item>
+      <item id="payload_sample_max_kb" type="input" default_value="64">Payload samples: max size per sample (KB, truncated)</item>
+
+      <item id="retain_admin_alert_days" type="input" default_value="90">Retention: admin alerts days (0 = keep forever)</item>
+      <item id="retain_admin_alert_read_days" type="input" default_value="30">Retention: read admin alerts days (0 = keep forever)</item>
+
+      <item id="admin_notifications_enabled" type="checkbox" default_value="Y">Admin panel notifications: show alerts in backend (recommended)</item>
+
+      <item id="internal_scheduler_enabled" type="checkbox" default_value="N">Internal scheduler (traffic-based): run watchdog/pruner without cron (best-effort)</item>
+      <item id="internal_scheduler_watchdog_interval_sec" type="input" default_value="600">Internal scheduler: watchdog interval (seconds)</item>
+      <item id="internal_scheduler_pruner_interval_sec" type="input" default_value="86400">Internal scheduler: pruner interval (seconds)</item>
+      <item id="internal_scheduler_area" type="selectbox" default_value="A">
+        Internal scheduler: run in which area
+        <variants>
+          <item id="A">Admin only</item>
+          <item id="AC">Admin + storefront</item>
+        </variants>
+      </item>
     </section>
   </settings>
 </addon>

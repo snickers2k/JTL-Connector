@@ -60,7 +60,7 @@ final class CsCartConnector implements ConnectorInterface
 
     public function getEndpointVersion(): string
     {
-        return '0.1.0';
+        return '0.3.1';
     }
 
     public function getPlatformVersion(): string
